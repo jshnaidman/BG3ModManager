@@ -337,3 +337,6 @@ ASALocalRun/
 .mfractor/
 *.zip
 *.psd
+
+# Local Git worktrees
+.worktrees/
