@@ -72,7 +72,12 @@ jobs:
         run: dotnet test tests/BG3ModManager.Tests/BG3ModManager.Tests.csproj --configuration Release
 
       - name: Build release package
-        run: msbuild BG3ModManager.sln /m /restore /p:Configuration=Publish /p:Platform=x64 /p:GeneratePackageOnBuild=false
+        shell: pwsh
+        run: |
+          msbuild BG3ModManager.sln /t:Restore /p:Configuration=Release /p:Platform=x64 /p:GeneratePackageOnBuild=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          msbuild BG3ModManager.sln /m /p:Configuration=Publish /p:Platform=x64 /p:GeneratePackageOnBuild=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Validate and rename package
         shell: pwsh
