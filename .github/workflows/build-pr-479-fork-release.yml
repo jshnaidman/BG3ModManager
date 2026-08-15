@@ -23,11 +23,56 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Pin .NET 8 SDK
+        shell: pwsh
+        run: |
+          $sdkVersion = (dotnet --list-sdks | Where-Object { $_ -match '^8\.' } | Select-Object -Last 1).Split(' ')[0]
+          if (-not $sdkVersion) { throw ".NET 8 SDK was not found" }
+          @{ sdk = @{ version = $sdkVersion; rollForward = "latestPatch" } } |
+            ConvertTo-Json -Depth 3 |
+            Set-Content global.json
+          dotnet --version
+
+      - name: Install LSLib parser generators
+        shell: pwsh
+        run: |
+          $dependencies = @(
+            @{
+              Name = "gplex"
+              Url = "https://s3.eu-central-1.amazonaws.com/nb-stor/dos-legacy/ExportTool/gplex-distro-1_2_2.zip"
+              Sha256 = "22f6c2ce7785fad217f6c47b3890304e092d24c613323f4f0363ab9190332ba5"
+              Root = "gplex-distro-1_2_2"
+            },
+            @{
+              Name = "gppg"
+              Url = "https://s3.eu-central-1.amazonaws.com/nb-stor/dos-legacy/ExportTool/gppg-distro-1_5_2.zip"
+              Sha256 = "94b55a051200471aba765d50404abe66a14742913e224adcb65b4e8383d2905a"
+              Root = "gppg-distro-1_5_2"
+            }
+          )
+
+          foreach ($dependency in $dependencies) {
+            $archive = Join-Path $env:RUNNER_TEMP "$($dependency.Name).zip"
+            $expanded = Join-Path $env:RUNNER_TEMP "$($dependency.Name)-expanded"
+            $destination = "External/lslib/External/$($dependency.Name)"
+            Invoke-WebRequest $dependency.Url -OutFile $archive
+            $actualHash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actualHash -ne $dependency.Sha256) {
+              throw "$($dependency.Name) checksum mismatch: $actualHash"
+            }
+            Expand-Archive $archive -DestinationPath $expanded
+            New-Item -ItemType Directory -Path $destination -Force | Out-Null
+            Copy-Item "$expanded/$($dependency.Root)/*" $destination -Recurse -Force
+          }
+
       - name: Run regression tests
         run: dotnet test tests/BG3ModManager.Tests/BG3ModManager.Tests.csproj --configuration Release
 
       - name: Build release package
-        run: dotnet build BG3ModManager.sln --configuration Publish -p:Platform=x64
+        run: msbuild BG3ModManager.sln /m /restore /p:Configuration=Publish /p:Platform=x64 /p:GeneratePackageOnBuild=false
 
       - name: Validate and rename package
         shell: pwsh
