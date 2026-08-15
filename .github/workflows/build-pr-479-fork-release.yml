@@ -68,13 +68,43 @@ jobs:
             Copy-Item "$expanded/$($dependency.Root)/*" $destination -Recurse -Force
           }
 
+      - name: Generate LSLib parser sources
+        shell: pwsh
+        run: |
+          msbuild External/lslib/LSLib/LSLib.csproj /t:PreBuildStoryGppgFiles /p:Configuration=Release /p:Platform=x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          msbuild External/lslib/LSLibStats/LSLibStats.csproj /t:PreBuildStatsGppgFiles /p:Configuration=Release /p:Platform=x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $expectedFiles = @(
+            "External/lslib/LSLib/LS/Story/GoalParser/Goal.lex.cs",
+            "External/lslib/LSLib/LS/Story/GoalParser/Goal.yy.cs",
+            "External/lslib/LSLib/LS/Story/HeaderParser/StoryHeader.lex.cs",
+            "External/lslib/LSLib/LS/Story/HeaderParser/StoryHeader.yy.cs",
+            "External/lslib/LSLibStats/Stats/File/Stat.lex.cs",
+            "External/lslib/LSLibStats/Stats/File/Stat.yy.cs",
+            "External/lslib/LSLibStats/Stats/Functor/Functor.lex.cs",
+            "External/lslib/LSLibStats/Stats/Functor/Functor.yy.cs",
+            "External/lslib/LSLibStats/Stats/Functor/Lua.lex.cs",
+            "External/lslib/LSLibStats/Stats/Functor/Lua.yy.cs",
+            "External/lslib/LSLibStats/Stats/Functor/Requirement.lex.cs",
+            "External/lslib/LSLibStats/Stats/Functor/Requirement.yy.cs",
+            "External/lslib/LSLibStats/Stats/Functor/RollConditions.lex.cs",
+            "External/lslib/LSLibStats/Stats/Functor/RollConditions.yy.cs"
+          )
+          foreach ($path in $expectedFiles) {
+            if (-not (Test-Path $path) -or (Get-Item $path).Length -le 0) {
+              throw "Expected generated parser source not found: $path"
+            }
+          }
+
       - name: Run regression tests
         run: dotnet test tests/BG3ModManager.Tests/BG3ModManager.Tests.csproj --configuration Release
 
       - name: Build release package
         shell: pwsh
         run: |
-          msbuild BG3ModManager.sln /t:Restore /p:Configuration=Release /p:Platform=x64 /p:GeneratePackageOnBuild=false
+          dotnet restore BG3ModManager.sln -p:Platform=x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           msbuild BG3ModManager.sln /m /p:Configuration=Publish /p:Platform=x64 /p:GeneratePackageOnBuild=false
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
