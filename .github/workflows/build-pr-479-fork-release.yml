@@ -1,0 +1,47 @@
+name: Build PR 479 fork release
+
+on:
+  push:
+    branches:
+      - release/pr-479-wine-fix-1
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out PR source commit
+        uses: actions/checkout@v4
+        with:
+          ref: 9d80ed303911b6544d276581c0f42e57cefa4b92
+          submodules: recursive
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Run regression tests
+        run: dotnet test tests/BG3ModManager.Tests/BG3ModManager.Tests.csproj --configuration Release
+
+      - name: Build release package
+        run: dotnet build BG3ModManager.sln --configuration Publish -p:Platform=x64
+
+      - name: Validate and rename package
+        shell: pwsh
+        run: |
+          $source = "BG3ModManager_v1.0.12.9.zip"
+          $destination = "BG3ModManager_v1.0.12.9-pr479-wine-fix.zip"
+          if (-not (Test-Path $source)) { throw "Expected package not found: $source" }
+          Move-Item $source $destination
+          if ((Get-Item $destination).Length -le 0) { throw "Release package is empty" }
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-479-wine-fix-package
+          path: BG3ModManager_v1.0.12.9-pr479-wine-fix.zip
+          if-no-files-found: error
+          retention-days: 30
